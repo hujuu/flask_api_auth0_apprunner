@@ -7,7 +7,7 @@ from os import environ as env
 from typing import Dict
 from six.moves.urllib.request import urlopen
 from dotenv import load_dotenv, find_dotenv
-from flask import Flask, request, jsonify, _request_ctx_stack, Response
+from flask import Flask, request, jsonify, g, Response
 from flask_cors import cross_origin
 from jose import jwt
 import requests
@@ -97,7 +97,7 @@ def requires_auth(func):
     @wraps(func)
     def decorated(*args, **kwargs):
         token = get_token_auth_header()
-        with urlopen("https://" + AUTH0_DOMAIN + "/.well-known/jwks.json") as response:
+        with urlopen(f"https://{AUTH0_DOMAIN}/.well-known/jwks.json") as response:
             jwks = json.loads(response.read())
         try:
             unverified_header = jwt.get_unverified_header(token)
@@ -128,7 +128,7 @@ def requires_auth(func):
                     rsa_key,
                     algorithms=ALGORITHMS,
                     audience=API_IDENTIFIER,
-                    issuer="https://" + AUTH0_DOMAIN + "/"
+                    issuer=f"https://{AUTH0_DOMAIN}/"
                 )
             except jwt.ExpiredSignatureError as expired_sign_error:
                 raise AuthError({"code": "token_expired",
@@ -144,13 +144,17 @@ def requires_auth(func):
                                      "Unable to parse authentication"
                                      " token."}, 401) from exc
 
-            _request_ctx_stack.top.current_user = payload
+            # Store the payload in Flask's g object instead of _request_ctx_stack
+            g.current_user = payload
             return func(*args, **kwargs)
         raise AuthError({"code": "invalid_header",
                          "description": "Unable to find appropriate key"}, 401)
 
     return decorated
 
+@app.route('/')
+def index():
+    return 'Welcome to Bizza Platform!'
 
 # Controllers API
 @app.route("/api/public")
@@ -169,6 +173,7 @@ def public():
 def private():
     """A valid access token is required to access this route
     """
+    # You can now access the current user from g.current_user
     response = "Hello from a private endpoint! You need to be authenticated to see this."
     return jsonify(message=response)
 
@@ -204,7 +209,6 @@ def private_profile():
         headers=headers,
     )
     data = response.json()
-    print(data)
     return jsonify(message=data)
 
 

@@ -7,6 +7,7 @@ from os import environ as env
 import os
 import sys
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
+from datetime import datetime
 from typing import Dict
 from six.moves.urllib.request import urlopen
 from dotenv import load_dotenv, find_dotenv
@@ -23,24 +24,37 @@ if ENV_FILE:
     load_dotenv(ENV_FILE)
 AUTH0_DOMAIN = env.get("AUTH0_DOMAIN")
 API_IDENTIFIER = env.get("API_IDENTIFIER")
+SQLALCHEMY_DATABASE_URI = env.get("SQLALCHEMY_DATABASE_URI")
 ALGORITHMS = ["RS256"]
 
 app = Flask(__name__, template_folder='templates')
 db_path = os.path.join(app.instance_path, 'bizza.db')
-print(f"Database path: {db_path}")
-app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
+app.config['SQLALCHEMY_DATABASE_URI'] = SQLALCHEMY_DATABASE_URI
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
 
 class User(db.Model):
     __tablename__ = "users"
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(55), unique=True)
-    name = db.Column(db.String(55), unique=False)
-    email = db.Column(db.String(100), unique=True)
+    user_id = db.Column(db.Integer, primary_key=True, nullable=False)
+    username = db.Column(db.String(100), unique=True, nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=False)
+    password = db.Column(db.String(128), nullable=False)
+    first_name = db.Column(db.String(100), nullable=False)
+    last_name = db.Column(db.String(100), nullable=False)
+    roles = db.Column(db.String(100))
+    is_active = db.Column(db.Boolean, default=True)
+    is_superuser = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     def __repr__(self):
-        return '<User {}>'.format(self.username)
+        return '<User %r>' % self.username
+
+# Create all database tables
+with app.app_context():
+    db.create_all()
 
 @app.route('/users')
 def get_users():
@@ -182,7 +196,12 @@ def requires_auth(func):
 def index():
     return 'Welcome to Bizza Platform!'
 
-# Controllers API
+
+@app.route("/api/v1/venues")
+def venues():
+    return jsonify({"id":1,"name":"Auditorium A"}), 404
+
+
 @app.route("/api/public")
 @cross_origin(headers=["Content-Type", "Authorization"])
 def public():

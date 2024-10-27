@@ -4,14 +4,19 @@
 from functools import wraps
 import json
 from os import environ as env
+import os
+import sys
+sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 from typing import Dict
 from six.moves.urllib.request import urlopen
 from dotenv import load_dotenv, find_dotenv
-from flask import Flask, request, jsonify, g, Response
+from flask import Flask, request, jsonify, g, Response, render_template
 from flask_cors import cross_origin
 from jose import jwt
 import requests
-
+import csv
+from flask_sqlalchemy import SQLAlchemy
+import db_operations
 
 ENV_FILE = find_dotenv()
 if ENV_FILE:
@@ -19,7 +24,28 @@ if ENV_FILE:
 AUTH0_DOMAIN = env.get("AUTH0_DOMAIN")
 API_IDENTIFIER = env.get("API_IDENTIFIER")
 ALGORITHMS = ["RS256"]
-app = Flask(__name__)
+
+app = Flask(__name__, template_folder='templates')
+db_path = os.path.join(app.instance_path, 'bizza.db')
+print(f"Database path: {db_path}")
+app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
+db = SQLAlchemy(app)
+
+
+class User(db.Model):
+    __tablename__ = "users"
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(55), unique=True)
+    name = db.Column(db.String(55), unique=False)
+    email = db.Column(db.String(100), unique=True)
+
+    def __repr__(self):
+        return '<User {}>'.format(self.username)
+
+@app.route('/users')
+def get_users():
+    users = db_operations.get_all_users()
+    return render_template('users.html', users=users)
 
 
 # Format error response and append status code.
